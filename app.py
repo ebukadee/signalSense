@@ -3,7 +3,8 @@ import sqlite3
 import os
 import numpy as np
 from datetime import datetime
-from ml_model import SignalClassifier, generate_signal
+from ml_model import SignalClassifier, generate_signal, generate_audio_wav
+import base64
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "signals.db")
@@ -38,6 +39,15 @@ init_db()
 @app.route("/")
 def index():
     return render_template("index.html")
+    
+@app.route("/api/history")
+def history():
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM detections ORDER BY id DESC LIMIT 20"
+    ).fetchall()
+    conn.close()
+    return jsonify([dict(row) for row in rows])
 
 @app.route("/api/generate", methods=["POST"])
 def api_generate():
@@ -56,6 +66,10 @@ def api_generate():
     signal = generate_signal(signal_type, samples, snr)
     result = classifier.predict(signal)
 
+    # Generate WAV audio bytes and convert to Base64
+    wav_bytes = generate_audio_wav(signal, signal_type)
+    audio_b64 = base64.b64encode(wav_bytes).decode('utf-8')
+
     conn = get_db()
     conn.execute(
         """INSERT INTO detections
@@ -73,7 +87,6 @@ def api_generate():
     conn.commit()
     conn.close()
 
-    # Downsample for browser display.
     display = signal[:min(len(signal), 1000)]
     waveform = np.abs(display).tolist()
 
@@ -85,17 +98,9 @@ def api_generate():
         "samples": samples,
         "waveform": waveform,
         "features": result["features"],
-        "probabilities": result["probabilities"]
+        "probabilities": result["probabilities"],
+        "audio_data": "data:audio/wav;base64," + audio_b64
     })
-
-@app.route("/api/history")
-def history():
-    conn = get_db()
-    rows = conn.execute(
-        "SELECT * FROM detections ORDER BY id DESC LIMIT 20"
-    ).fetchall()
-    conn.close()
-    return jsonify([dict(row) for row in rows])
 
 if __name__ == "__main__":
     app.run(debug=True)

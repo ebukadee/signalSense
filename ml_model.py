@@ -1,8 +1,11 @@
 import numpy as np
+import io
+import wave
 from scipy.signal import hilbert
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
+
 
 SIGNAL_TYPES = ["NOISE", "AM", "FM", "BPSK", "FSK"]
 
@@ -152,3 +155,45 @@ class SignalClassifier:
             "probabilities": result_probs,
             "features": result_features
         }
+
+def generate_audio_wav(signal, signal_type, sample_rate=8000):
+    """
+    Converts complex baseband IQ signals into an audible real audio signal 
+    formatted as 16-bit PCM WAV bytes.
+    """
+    n = len(signal)
+    t = np.arange(n) / float(sample_rate)
+    
+    # Map signals to audio frequencies (e.g., 440 Hz audio tone)
+    if signal_type == "NOISE":
+        audio = np.real(signal)
+    elif signal_type == "AM":
+        # Extract envelope (amplitude modulation)
+        audio = np.abs(signal) - np.mean(np.abs(signal))
+    elif signal_type == "FM":
+        # Instantaneous frequency variation mapped to audio
+        phase = np.unwrap(np.angle(signal))
+        audio = np.diff(phase, prepend=phase[0])
+    elif signal_type in ["BPSK", "FSK"]:
+        # Modulate signal state onto a audible carrier (440 Hz)
+        audio = np.real(signal) * np.cos(2 * np.pi * 440 * t)
+    else:
+        audio = np.real(signal)
+
+    # Normalize audio to [-1.0, 1.0]
+    max_val = np.max(np.abs(audio))
+    if max_val > 0:
+        audio = audio / max_val
+
+    # Convert float32 array to 16-bit PCM
+    audio_int16 = (audio * 32767).astype(np.int16)
+
+    # Build WAV file in memory
+    buf = io.BytesIO()
+    with wave.open(buf, 'wb') as wav_file:
+        wav_file.setnchannels(1)      # Mono
+        wav_file.setsampwidth(2)      # 16-bit PCM (2 bytes)
+        wav_file.setframerate(sample_rate)
+        wav_file.writeframes(audio_int16.tobytes())
+    
+    return buf.getvalue()

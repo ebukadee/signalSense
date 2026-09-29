@@ -1,28 +1,334 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SignalSense</title><link rel="stylesheet" href="/static/style.css"><script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-</head>
-<body><div class="app">
-<header><div class="brand"><div class="mark">S</div><div><b>SignalSense</b><small>Wireless signal detection</small></div></div><div class="ready"><i></i> ML ENGINE READY</div></header>
-<section class="hero"><div class="eyebrow">MACHINE LEARNING • SIGNAL ANALYSIS</div><h1>Detect and classify<br>wireless signals.</h1><p>Generate a controlled signal, add noise, and let the model identify it. No special hardware required.</p></section>
-<section class="grid two">
-<div class="panel"><div class="head"><div><span>01</span><h2>Create a signal</h2></div><small>Test conditions</small></div>
-<div class="controls"><label>Signal type<select id="signalType"><option value="NOISE">Noise</option><option value="AM">AM</option><option value="FM">FM</option><option value="BPSK">BPSK</option><option value="FSK">FSK</option></select></label><label>SNR<div class="unit"><input id="snr" type="number" value="10" min="-10" max="30"><em>dB</em></div></label><label>Samples<div class="unit"><input id="samples" type="number" value="2048" min="256" max="8192"><em>IQ</em></div></label></div>
-<button id="detectBtn" onclick="detectSignal()">Generate &amp; Detect <b>→</b></button><p class="note">Software simulation • no radio hardware required</p></div>
-<div class="panel result"><div class="head"><div><span>02</span><h2>Detection result</h2></div><strong id="badge">WAITING</strong></div><div class="result-main"><div><small>MODEL PREDICTION</small><div id="prediction">—</div></div><div class="confidence"><small>CONFIDENCE</small><b id="confidence">—</b></div></div><div class="meta"><div>Actual<strong id="actual">—</strong></div><div>SNR<strong id="snrResult">—</strong></div><div>Samples<strong id="sampleResult">—</strong></div></div></div>
-</section>
-<section class="grid visual"><div class="panel"><div class="head compact"><div><span>03</span><h2>Signal waveform</h2></div></div><div class="chart"><canvas id="waveChart"></canvas><div id="emptyChart">Generate a signal to view its waveform.</div></div></div><div class="panel"><div class="head compact"><div><span>04</span><h2>Model confidence</h2></div></div><div id="probabilities" class="probs"><div class="empty">Results will appear here.</div></div></div></section>
-<details class="advanced"><summary>Advanced signal features <small>Optional project detail</small></summary><table><thead><tr><th>Feature</th><th>Value</th></tr></thead><tbody id="features"></tbody></table></details>
-<section class="panel history"><div class="head compact"><div><span>05</span><h2>Recent detections</h2></div><small>Last 20 tests</small></div><div class="scroll"><table><thead><tr><th>Time</th><th>Actual</th><th>Predicted</th><th>Confidence</th><th>SNR</th></tr></thead><tbody id="history"><tr><td colspan="5" class="empty">No detections yet.</td></tr></tbody></table></div></section>
-<footer><b>SignalSense</b><span>Software-based wireless signal detection &amp; classification</span></footer>
-</div>
-<script>
-var waveChart=null;
-function detectSignal(){var button=document.getElementById("detectBtn"),badge=document.getElementById("badge");button.disabled=true;button.innerHTML="Analysing signal... <i class='spinner'></i>";badge.className="processing";badge.innerHTML="PROCESSING";var payload={signal_type:document.getElementById("signalType").value,snr:Number(document.getElementById("snr").value),samples:Number(document.getElementById("samples").value)};fetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)}).then(function(r){return r.json();}).then(function(data){if(data.error){alert(data.error);return;}document.getElementById("actual").innerHTML=data.actual_type;document.getElementById("prediction").innerHTML=data.predicted_type;document.getElementById("confidence").innerHTML=data.confidence+"%";document.getElementById("snrResult").innerHTML=data.snr+" dB";document.getElementById("sampleResult").innerHTML=data.samples;badge.className="success";badge.innerHTML="DETECTED";drawWaveform(data.waveform);showProbabilities(data.probabilities);showFeatures(data.features);loadHistory();}).catch(function(error){badge.className="error";badge.innerHTML="ERROR";alert("Request failed: "+error);}).finally(function(){button.disabled=false;button.innerHTML="Generate & Detect <b>→</b>";});}
-function drawWaveform(values){document.getElementById("emptyChart").style.display="none";var ctx=document.getElementById("waveChart").getContext("2d");if(waveChart!==null)waveChart.destroy();waveChart=new Chart(ctx,{type:"line",data:{labels:values.map(function(v,i){return i;}),datasets:[{label:"Amplitude",data:values,borderWidth:1.5,pointRadius:0,tension:.15}]},options:{responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{display:false}},scales:{x:{title:{display:true,text:"Sample"},grid:{display:false}},y:{title:{display:true,text:"Amplitude"},grid:{color:"rgba(0,0,0,.06)"}}}}});}
-function showProbabilities(data){var html="",key;for(key in data){html+="<div class='prob'><div><span>"+key+"</span><b>"+data[key]+"%</b></div><aside><i style='width:"+data[key]+"%'></i></aside></div>";}document.getElementById("probabilities").innerHTML=html;}
-function showFeatures(data){var html="",key;for(key in data)html+="<tr><td>"+key+"</td><td>"+data[key]+"</td></tr>";document.getElementById("features").innerHTML=html;}
-function loadHistory(){fetch("/api/history").then(function(r){return r.json();}).then(function(rows){var html="",i;if(!rows.length){document.getElementById("history").innerHTML="<tr><td colspan='5' class='empty'>No detections yet.</td></tr>";return;}for(i=0;i<rows.length;i++){html+="<tr><td>"+rows[i].created_at+"</td><td>"+rows[i].signal_type+"</td><td><b>"+rows[i].predicted_type+"</b></td><td>"+rows[i].confidence+"%</td><td>"+rows[i].snr+" dB</td></tr>";}document.getElementById("history").innerHTML=html;});}loadHistory();
-</script></body></html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SignalSense</title>
+    <link rel="stylesheet" href="/static/style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body>
+    <div class="app">
+      <header>
+        <div class="brand">
+          <div class="mark">S</div>
+          <div>
+            <b>ECE 515 GROUP 9</b><small>Wireless signal detection</small>
+          </div>
+        </div>
+        <div class="ready"><i></i> ML ENGINE READY</div>
+      </header>
+      <section class="hero">
+        <div class="eyebrow">MACHINE LEARNING • SIGNAL ANALYSIS</div>
+        <h1>Detect and classify<br />wireless signals using ML.</h1>
+        <p>
+          Generate a controlled signal, and let the trained model identify it.
+        </p>
+      </section>
+      <section class="grid two">
+        <div class="panel">
+          <div class="head">
+            <div>
+              <span>01</span>
+              <h2>Create a signal</h2>
+            </div>
+            <small>Test conditions</small>
+          </div>
+          <div class="controls">
+            <label
+              >Signal type<select id="signalType">
+                <option value="NOISE">Noise</option>
+                <option value="AM">AM</option>
+                <option value="FM">FM</option>
+                <option value="BPSK">BPSK</option>
+                <option value="FSK">FSK</option>
+              </select></label
+            ><label
+              >SNR
+              <div class="unit">
+                <input
+                  id="snr"
+                  type="number"
+                  value="10"
+                  min="-10"
+                  max="30"
+                /><em>dB</em>
+              </div></label
+            ><label
+              >Samples
+              <div class="unit">
+                <input
+                  id="samples"
+                  type="number"
+                  value="2048"
+                  min="256"
+                  max="8192"
+                /><em>IQ</em>
+              </div></label
+            >
+          </div>
+          <button id="detectBtn" onclick="detectSignal()">
+            Generate &amp; Detect <b>→</b>
+          </button>
+        </div>
+        <div class="panel result">
+          <div class="head">
+            <div>
+              <span>02</span>
+              <h2>Detection result</h2>
+            </div>
+            <strong id="badge">WAITING</strong>
+          </div>
+          <div class="result-main">
+            <div>
+              <small>MODEL PREDICTION</small>
+              <div id="prediction">—</div>
+            </div>
+            <div class="confidence">
+              <small>CONFIDENCE</small><b id="confidence">—</b>
+            </div>
+          </div>
+          <div class="meta">
+            <div>Actual<strong id="actual">—</strong></div>
+            <div>SNR<strong id="snrResult">—</strong></div>
+            <div>Samples<strong id="sampleResult">—</strong></div>
+          </div>
+        </div>
+      </section>
+      <section class="grid visual">
+        <div class="panel">
+          <div class="head compact">
+            <div>
+              <span>03</span>
+              <h2>Signal waveform &amp; Audio</h2>
+            </div>
+          </div>
+          <div class="audio-player" style="margin-bottom: 12px">
+            <audio
+              id="signalAudio"
+              controls
+              style="width: 100%; height: 36px"
+            ></audio>
+          </div>
+          <div class="chart">
+            <canvas id="waveChart"></canvas>
+            <div id="emptyChart">
+              Generate a signal to view its waveform and listen to audio.
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="head compact">
+            <div>
+              <span>04</span>
+              <h2>Model confidence</h2>
+            </div>
+          </div>
+          <div id="probabilities" class="probs">
+            <div class="empty">Results will appear here.</div>
+          </div>
+        </div>
+      </section>
+      <details class="advanced">
+        <summary>
+          Advanced signal features <small>Optional project detail</small>
+        </summary>
+        <table>
+          <thead>
+            <tr>
+              <th>Feature</th>
+              <th>Value</th>
+            </tr>
+          </thead>
+          <tbody id="features"></tbody>
+        </table>
+      </details>
+      <section class="panel history">
+        <div class="head compact">
+          <div>
+            <span>05</span>
+            <h2>Recent detections</h2>
+          </div>
+          <small>Last 20 tests</small>
+        </div>
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Actual</th>
+                <th>Predicted</th>
+                <th>Confidence</th>
+                <th>SNR</th>
+              </tr>
+            </thead>
+            <tbody id="history">
+              <tr>
+                <td colspan="5" class="empty">No detections yet.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <footer>
+        <b>SignalSense</b
+        ><span
+          >Software-based wireless signal detection &amp; classification</span
+        >
+      </footer>
+    </div>
+    <script>
+      var waveChart = null;
+      function detectSignal() {
+        var button = document.getElementById("detectBtn"),
+          badge = document.getElementById("badge");
+        button.disabled = true;
+        button.innerHTML = "Analysing signal... <i class='spinner'></i>";
+        badge.className = "processing";
+        badge.innerHTML = "PROCESSING";
+        var payload = {
+          signal_type: document.getElementById("signalType").value,
+          snr: Number(document.getElementById("snr").value),
+          samples: Number(document.getElementById("samples").value),
+        };
+        fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (data) {
+            if (data.error) {
+              alert(data.error);
+              return;
+            }
+
+            // Update visual text elements
+            document.getElementById("actual").innerHTML = data.actual_type;
+            document.getElementById("prediction").innerHTML =
+              data.predicted_type;
+            document.getElementById("confidence").innerHTML =
+              data.confidence + "%";
+            document.getElementById("snrResult").innerHTML = data.snr + " dB";
+            document.getElementById("sampleResult").innerHTML = data.samples;
+            badge.className = "success";
+            badge.innerHTML = "DETECTED";
+
+            // Play Signal Audio
+            var audioEl = document.getElementById("signalAudio");
+            audioEl.src = data.audio_data;
+            audioEl.play().catch(function (e) {
+              console.log("Auto-play prevented:", e);
+            });
+
+            drawWaveform(data.waveform);
+            showProbabilities(data.probabilities);
+            showFeatures(data.features);
+            loadHistory();
+          })
+          .catch(function (error) {
+            badge.className = "error";
+            badge.innerHTML = "ERROR";
+            alert("Request failed: " + error);
+          })
+          .finally(function () {
+            button.disabled = false;
+            button.innerHTML = "Generate & Detect <b>→</b>";
+          });
+      }
+      function drawWaveform(values) {
+        document.getElementById("emptyChart").style.display = "none";
+        var ctx = document.getElementById("waveChart").getContext("2d");
+        if (waveChart !== null) waveChart.destroy();
+        waveChart = new Chart(ctx, {
+          type: "line",
+          data: {
+            labels: values.map(function (v, i) {
+              return i;
+            }),
+            datasets: [
+              {
+                label: "Amplitude",
+                data: values,
+                borderWidth: 1.5,
+                pointRadius: 0,
+                tension: 0.15,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: {
+                title: { display: true, text: "Sample" },
+                grid: { display: false },
+              },
+              y: {
+                title: { display: true, text: "Amplitude" },
+                grid: { color: "rgba(0,0,0,.06)" },
+              },
+            },
+          },
+        });
+      }
+      function showProbabilities(data) {
+        var html = "",
+          key;
+        for (key in data) {
+          html +=
+            "<div class='prob'><div><span>" +
+            key +
+            "</span><b>" +
+            data[key] +
+            "%</b></div><aside><i style='width:" +
+            data[key] +
+            "%'></i></aside></div>";
+        }
+        document.getElementById("probabilities").innerHTML = html;
+      }
+      function showFeatures(data) {
+        var html = "",
+          key;
+        for (key in data)
+          html += "<tr><td>" + key + "</td><td>" + data[key] + "</td></tr>";
+        document.getElementById("features").innerHTML = html;
+      }
+      function loadHistory() {
+        fetch("/api/history")
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (rows) {
+            var html = "",
+              i;
+            if (!rows.length) {
+              document.getElementById("history").innerHTML =
+                "<tr><td colspan='5' class='empty'>No detections yet.</td></tr>";
+              return;
+            }
+            for (i = 0; i < rows.length; i++) {
+              html +=
+                "<tr><td>" +
+                rows[i].created_at +
+                "</td><td>" +
+                rows[i].signal_type +
+                "</td><td><b>" +
+                rows[i].predicted_type +
+                "</b></td><td>" +
+                rows[i].confidence +
+                "%</td><td>" +
+                rows[i].snr +
+                " dB</td></tr>";
+            }
+            document.getElementById("history").innerHTML = html;
+          });
+      }
+      loadHistory();
+    </script>
+  </body>
+</html>
